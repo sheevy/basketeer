@@ -29,6 +29,13 @@ const SEARCH_BODY = [
               maxWeight: 0,
               increment: 0,
               bulkBuyLimit: 25,
+              superDepartmentName: "Fresh Food",
+              departmentId: "b;RnJlc2ggRm9vZHxNaWxr",
+              departmentName: "Milk, Butter & Eggs",
+              aisleId: "b;TWlsaw==",
+              aisleName: "Milk",
+              shelfId: "b;U2VtaS1Ta2ltbWVk",
+              shelfName: "Semi-Skimmed Milk",
               sellers: {
                 results: [
                   {
@@ -163,6 +170,24 @@ describe("request assembly", () => {
     expect(searchCalls[0]!.body[0].query).toContain(quantityFields);
   });
 
+  it("selects shelf taxonomy fields on product, search, category and favourites reads", async () => {
+    const taxonomyFields =
+      "superDepartmentName departmentId departmentName aisleId aisleName shelfId shelfName";
+    const { impl, calls } = stubFetch([
+      { body: PRODUCT_PACKAGED },
+      { body: SEARCH_BODY },
+      { body: [{ data: { category: { results: [] } } }] },
+      { body: [{ data: { favourites: { products: [] } } }] },
+    ]);
+    const t = new Basketeer({ session: SESSION, throttleMs: 0, fetchImpl: impl });
+    await t.getProduct("282822189");
+    await t.search("milk");
+    await t.browseCategory("b;TWlsaw==");
+    await t.favourites();
+    expect(calls).toHaveLength(4);
+    for (const call of calls) expect(call.body[0].query).toContain(taxonomyFields);
+  });
+
   it("fetches multiple products in one aliased request", async () => {
     const first = PRODUCT_PACKAGED[0]!.data.product;
     const second = PRODUCT_LOOSE[0]!.data.product;
@@ -247,6 +272,22 @@ describe("parsing", () => {
     expect(r!.onOffer).toBe(true);
     expect(r!.promotions[0]!.priceBeforeDiscount).toBeNull();
     expect(r!.promotions[0]!.priceAfterDiscount).toBe(1.65);
+  });
+
+  it("parses shelf taxonomy, and null when Tesco sends none of its fields", async () => {
+    const { impl } = stubFetch([{ body: SEARCH_BODY }, { body: PRODUCT_PACKAGED }]);
+    const t = new Basketeer({ throttleMs: 0, fetchImpl: impl });
+    const { results } = await t.search("milk");
+    expect(results[0]!.taxonomy).toEqual({
+      superDepartment: "Fresh Food",
+      department: "Milk, Butter & Eggs",
+      departmentId: "b;RnJlc2ggRm9vZHxNaWxr",
+      aisle: "Milk",
+      aisleId: "b;TWlsaw==",
+      shelf: "Semi-Skimmed Milk",
+      shelfId: "b;U2VtaS1Ta2ltbWVk",
+    });
+    expect((await t.getProduct("282822189")).taxonomy).toBeNull();
   });
 
   it("parses catch-weight options on search results", async () => {

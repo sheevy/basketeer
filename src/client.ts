@@ -35,6 +35,7 @@ import {
   parseBasket,
   parseBookedSlot,
   parseOrder,
+  parseOrderReceipt,
   parseProduct,
   parseProductNode,
   parseSlot,
@@ -52,6 +53,7 @@ import {
   GET_FAVOURITES,
   GET_LAST_FULFILLED_ORDER,
   GET_ORDER_HISTORY,
+  GET_ORDER_RECEIPT,
   GET_PRODUCT,
   GET_UPCOMING_ORDERS,
   getProductsQuery,
@@ -414,6 +416,11 @@ export class Basketeer {
       opts: { offset?: number; limit?: number; contexts?: readonly OrderContext[] } = {},
     ): Promise<OrderHistoryPage> => this.orderHistory(opts),
     /**
+     * One order by `Order.id` (not `orderNo`) as Tesco's receipt view shows it,
+     * with lines flattened across its `splitView` splits. Null if not found.
+     */
+    receipt: (orderId: string): Promise<Order | null> => this.orderReceipt(orderId),
+    /**
      * Open an order for amendment. Returns an {@link Amendment} handle whose
      * basket ops apply to THAT order; finish by checking out again, or call
      * `discard()`. Only works before the order's `amendExpiry`. While amending,
@@ -454,6 +461,16 @@ export class Basketeer {
       mfeName: MFE.orders,
     });
     return data.order ? parseOrder(data.order) : null;
+  }
+
+  private async orderReceipt(orderId: string): Promise<Order | null> {
+    const data = await this.transport.execute<{ order?: Raw }>({
+      operationName: "GetOrderReceipt",
+      query: GET_ORDER_RECEIPT,
+      variables: { orderId },
+      mfeName: MFE.orders,
+    });
+    return data.order ? parseOrderReceipt(data.order) : null;
   }
 
   private async listOrders(opts: { contexts?: readonly OrderContext[] }): Promise<Order[]> {

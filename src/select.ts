@@ -22,6 +22,7 @@ const SEARCH_RESULT_KEYS: Record<keyof SearchResult, true> = {
   onOffer: true,
   promotions: true,
   quantityRules: true,
+  taxonomy: true,
 };
 export const SEARCH_RESULT_FIELDS: readonly string[] = Object.keys(SEARCH_RESULT_KEYS);
 
@@ -40,6 +41,7 @@ const PRODUCT_KEYS: Record<Exclude<keyof Product, "raw">, true> = {
   nutrition: true,
   macros: true,
   quantityRules: true,
+  taxonomy: true,
 };
 export const PRODUCT_FIELDS: readonly string[] = Object.keys(PRODUCT_KEYS);
 

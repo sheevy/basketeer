@@ -18,6 +18,7 @@ The full surface. For the pitch, quick start, and how it works, see the [README]
 | Book / release | `slots.book(id)` / `slots.release(id)` → `BookedSlot` | authed | Held until `reservationExpiry`. |
 | Orders | `orders.list(opts)` → `Order[]` | authed | Upcoming orders + amend window. |
 | Order history | `orders.history({ offset?, limit?, contexts? })` → `OrderHistoryPage` | authed | Completed orders, newest first. Offset-paged and **live** — see [Order history](#order-history). |
+| Order receipt | `orders.receipt(orderId)` → `Order \| null` | authed | One order by `Order.id`, as Tesco's receipt view shows it. |
 | Amend | `orders.amend(no)` → `Amendment` | authed | Scoped handle: `.set / .remove / .discard`. |
 | Cancel | `orders.cancel(no)` | authed | Before the cutoff. |
 | Reorder | `orders.lastFulfilled()` → `Order \| null` | authed | Last delivered shop. |
@@ -42,6 +43,8 @@ Tesco image URLs usually include `h` and `w` query parameters. `resizeImageUrl(u
 ## Catalogue Models
 
 `Product` and `SearchResult` include `quantityRules`, Tesco's product type, weight, increment, bulk-buy, and catch-weight metadata. Ordinary fixed products commonly return zero weights/increments and an empty `catchWeightOptions` array; catch-weight products can return non-zero `averageWeight`, `minWeight`, `maxWeight`, `increment`, and selectable `{ price, weight, default }` options. Missing or malformed scalar values are exposed as `null`.
+
+They also include `taxonomy`, where Tesco shelves the product: `{ superDepartment, department, departmentId, aisle, aisleId, shelf, shelfId }`, e.g. Fresh Food › Milk, Butter & Eggs › Milk › Semi-Skimmed Milk. The ids are opaque facets (`b;`-prefixed). A level Tesco omits is `null`, and `taxonomy` itself is `null` when Tesco returns none of them.
 
 ## Nutrition
 
@@ -126,6 +129,10 @@ for (let offset: number | null = 0; offset !== null; ) {
 4. Periodically do a full pass — an older order can change or disappear beyond the overlap window.
 
 This is a client-side heuristic, not a Tesco "orders after" facility. Custom `contexts` (e.g. other order types or statuses) are forwarded unchanged; the default is `PREVIOUS_ORDER_CONTEXTS` (`GROCERY` / `Previous`).
+
+**Dates and prices.** `Order.createdAt` is when the order was placed; `slot.start` is when it was delivered. Each `OrderItem.cost` is the line total charged, not a unit price. On a delivered order checked live, the line costs plus `slot.charge` summed exactly to `totalPrice`, and `totalItems` was higher than the summed line quantities, consistent with the lines listing what was delivered rather than what was ordered.
+
+**Receipt view.** `orders.receipt(orderId)` fetches one order by `Order.id` (not `orderNo`) with its lines flattened across Tesco's `splitView` splits, which is what the tesco.com receipt page renders. On the delivered grocery order checked, it returned the same lines and costs as `orders.history`.
 
 ## Auth: where the browser runs
 

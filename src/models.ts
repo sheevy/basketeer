@@ -36,6 +36,21 @@ export interface ProductQuantityRules {
   catchWeightOptions: CatchWeightOption[];
 }
 
+/**
+ * Where Tesco shelves a product: super-department › department › aisle › shelf,
+ * e.g. Fresh Food › Milk, Butter & Eggs › Milk › Semi-Skimmed Milk. Ids are
+ * opaque facets (`b;`-prefixed). Any level Tesco omits is null.
+ */
+export interface ProductTaxonomy {
+  superDepartment: string | null;
+  department: string | null;
+  departmentId: string | null;
+  aisle: string | null;
+  aisleId: string | null;
+  shelf: string | null;
+  shelfId: string | null;
+}
+
 export interface Product {
   /** tpnc — the SKU used for product lookup and basket ops. */
   sku: string;
@@ -53,6 +68,8 @@ export interface Product {
   available: boolean | null;
   packSize: PackSize | null;
   quantityRules: ProductQuantityRules;
+  /** Shelf taxonomy, or null if Tesco returned none of its fields. */
+  taxonomy: ProductTaxonomy | null;
   promotions: Promotion[];
   /** Normalized nutrition, or null if Tesco returned none / it was unparseable. */
   nutrition: Nutrition | null;
@@ -69,6 +86,8 @@ export interface SearchResult {
   imageUrl: string | null;
   price: Price;
   quantityRules: ProductQuantityRules;
+  /** See {@link Product.taxonomy}. */
+  taxonomy: ProductTaxonomy | null;
   /** See {@link Product.available} — context-dependent (anonymous = national). */
   available: boolean | null;
   onOffer: boolean;
@@ -161,6 +180,8 @@ export interface OrderItem {
   weight: number | null;
   productId: string | null;
   title: string;
+  /** Line total charged (not a unit price), or null if absent. */
+  cost: number | null;
 }
 
 export interface OrderSlot {
@@ -181,6 +202,8 @@ export interface Order {
   id: string;
   orderNo: string;
   status: string;
+  /** ISO time the order was placed (not its delivery slot), or null if absent. */
+  createdAt: string | null;
   totalPrice: number | null;
   totalItems: number | null;
   /** True while the order is open for amendment. */

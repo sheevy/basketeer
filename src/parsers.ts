@@ -17,6 +17,7 @@ import type {
   Price,
   Product,
   ProductQuantityRules,
+  ProductTaxonomy,
   Promotion,
   SearchResult,
   Slot,
@@ -90,6 +91,19 @@ function parseQuantityRules(v: Raw): ProductQuantityRules {
   };
 }
 
+function parseTaxonomy(v: Raw): ProductTaxonomy | null {
+  const taxonomy: ProductTaxonomy = {
+    superDepartment: str(v.superDepartmentName),
+    department: str(v.departmentName),
+    departmentId: id(v.departmentId),
+    aisle: str(v.aisleName),
+    aisleId: id(v.aisleId),
+    shelf: str(v.shelfName),
+    shelfId: id(v.shelfId),
+  };
+  return Object.values(taxonomy).some((x) => x !== null) ? taxonomy : null;
+}
+
 export function parseProduct(v: unknown): Product {
   const node = obj(v);
   const details = obj(node.details);
@@ -104,6 +118,7 @@ export function parseProduct(v: unknown): Product {
     available: bool(node.isForSale),
     packSize: parsePackSize(details.packSize),
     quantityRules: parseQuantityRules(node),
+    taxonomy: parseTaxonomy(node),
     promotions: parsePromotions(node.promotions),
     nutrition,
     macros: nutrition?.macros ?? null,
@@ -129,6 +144,7 @@ export function parseProductNode(v: unknown): SearchResult | null {
     imageUrl: str(node.defaultImageUrl),
     price: parsePrice(seller.price),
     quantityRules: parseQuantityRules(node),
+    taxonomy: parseTaxonomy(node),
     available: bool(node.isForSale),
     onOffer: promotions.length > 0,
     promotions,
@@ -185,11 +201,8 @@ export function parseBookedSlot(v: unknown): BookedSlot {
   };
 }
 
-export function parseOrder(v: unknown): Order {
-  const node = obj(v);
-  const slot = obj(node.slot);
-  const addr = obj(node.address);
-  const items: OrderItem[] = objs(node.items).map((it) => {
+function parseOrderItems(v: unknown): OrderItem[] {
+  return objs(v).map((it) => {
     const product = obj(it.product);
     return {
       id: id(it.id) ?? "",
@@ -198,12 +211,21 @@ export function parseOrder(v: unknown): Order {
       weight: num(it.weight),
       productId: id(product.id),
       title: str(product.title) ?? "",
+      cost: num(it.cost),
     };
   });
+}
+
+export function parseOrder(v: unknown): Order {
+  const node = obj(v);
+  const slot = obj(node.slot);
+  const addr = obj(node.address);
+  const items = parseOrderItems(node.items);
   return {
     id: id(node.id) ?? "",
     orderNo: id(node.orderNo) ?? "",
     status: str(node.status) ?? "",
+    createdAt: str(node.createdDateTime),
     totalPrice: num(node.totalPrice),
     totalItems: num(node.totalItems),
     isInAmend: Boolean(node.isInAmend),
@@ -223,6 +245,13 @@ export function parseOrder(v: unknown): Order {
     items,
     raw: v,
   };
+}
+
+/** A receipt-view order: its lines live in `splitView` splits, flattened here in order. */
+export function parseOrderReceipt(v: unknown): Order {
+  const node = obj(v);
+  const splits = Array.isArray(node.splitView) ? node.splitView : [node.splitView];
+  return { ...parseOrder(v), items: parseOrderItems(splits.flatMap((s) => arr(obj(s).items))) };
 }
 
 /** YYYY-MM-DD `offsetDays` from today, in LOCAL time (Tesco slot dates are UK-local). */

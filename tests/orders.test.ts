@@ -181,12 +181,118 @@ describe("orders.history", () => {
     expect(calls).toHaveLength(0);
   });
 
+  it("selects and parses the order's createdAt and each line's cost", async () => {
+    const order = {
+      ...historyBody(["a"])[0]!.data.orderSearch.orders[0],
+      createdDateTime: "2026-09-02T18:16:12.917Z",
+      items: [
+        {
+          id: "l1",
+          quantity: 2,
+          unit: "pcs",
+          weight: 0,
+          cost: 3.3,
+          product: { id: "111", title: "Milk" },
+        },
+        { id: "l2", quantity: 1, unit: "pcs", weight: 0, product: { id: "222", title: "Bread" } },
+      ],
+    };
+    const { impl, calls } = stubFetch([{ body: [{ data: { orderSearch: { orders: [order] } } }] }]);
+    const t = new Basketeer({ session: SESSION, throttleMs: 0, fetchImpl: impl });
+    const { orders } = await t.orders.history();
+
+    expect(calls[0]!.body[0].query).toContain("createdDateTime");
+    expect(calls[0]!.body[0].query).toContain(
+      "items { id quantity unit weight cost product { id title } }",
+    );
+    expect(orders[0]!.createdAt).toBe("2026-09-02T18:16:12.917Z");
+    expect(orders[0]!.items.map((i) => i.cost)).toEqual([3.3, null]);
+  });
+
   it("treats a missing orderSearch or non-array orders as a contract error, not a terminal page", async () => {
     for (const body of [[{ data: {} }], [{ data: { orderSearch: { orders: "nope" } } }]]) {
       const { impl } = stubFetch([{ body }]);
       const t = new Basketeer({ session: SESSION, throttleMs: 0, fetchImpl: impl });
       await expect(t.orders.history()).rejects.toThrow(BasketeerError);
     }
+  });
+});
+
+/** A GetOrderReceipt response body for one delivered order with the given splitView. */
+function receiptBody(splitView: unknown) {
+  return [
+    {
+      data: {
+        order: {
+          id: "order-id-1",
+          orderNo: "100200300",
+          status: "Delivered",
+          createdDateTime: "2026-09-02T18:16:12.917Z",
+          totalPrice: 9.3,
+          totalItems: 3,
+          slot: { id: "s1", start: "2026-09-03T14:00:00Z", end: "2026-09-03T15:00:00Z", charge: 4 },
+          splitView,
+        },
+      },
+    },
+  ];
+}
+
+const MILK = {
+  id: "l1",
+  quantity: 2,
+  unit: "pcs",
+  weight: 0,
+  cost: 3.3,
+  product: { id: "111", title: "Milk" },
+};
+const BREAD = {
+  id: "l2",
+  quantity: 1,
+  unit: "pcs",
+  weight: 0,
+  cost: 2,
+  product: { id: "222", title: "Bread" },
+};
+
+describe("orders.receipt", () => {
+  it("sends GetOrderReceipt with {orderId} and flattens splitView lines in order", async () => {
+    const { impl, calls } = stubFetch([
+      { body: receiptBody([{ items: [MILK] }, { items: [BREAD] }]) },
+    ]);
+    const t = new Basketeer({ session: SESSION, throttleMs: 0, fetchImpl: impl });
+    const order = await t.orders.receipt("order-id-1");
+
+    const op = calls[0]!.body[0];
+    expect(op.operationName).toBe("GetOrderReceipt");
+    expect(op.extensions.mfeName).toBe("mfe-orders");
+    expect(op.variables).toEqual({ orderId: "order-id-1" });
+
+    expect(order).toMatchObject({
+      id: "order-id-1",
+      orderNo: "100200300",
+      status: "Delivered",
+      createdAt: "2026-09-02T18:16:12.917Z",
+      totalPrice: 9.3,
+      slot: { charge: 4 },
+    });
+    expect(order!.items.map((i) => [i.productId, i.quantity, i.cost])).toEqual([
+      ["111", 2, 3.3],
+      ["222", 1, 2],
+    ]);
+  });
+
+  it("accepts a single splitView object as well as a list", async () => {
+    const { impl } = stubFetch([{ body: receiptBody({ items: [MILK, BREAD] }) }]);
+    const t = new Basketeer({ session: SESSION, throttleMs: 0, fetchImpl: impl });
+    const order = await t.orders.receipt("order-id-1");
+    expect(order!.items.map((i) => i.title)).toEqual(["Milk", "Bread"]);
+  });
+
+  it("returns null when the order is not found", async () => {
+    const { impl } = stubFetch([{ body: [{ data: { order: null } }] }]);
+    const t = new Basketeer({ session: SESSION, throttleMs: 0, fetchImpl: impl });
+    expect(await t.orders.receipt("missing")).toBeNull();
   });
 });
 

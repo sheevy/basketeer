@@ -3,10 +3,15 @@
  * Internal — not part of the public API. Config/constants live in operations.ts.
  */
 
+// Shelf taxonomy: super-department › department › aisle › shelf. Ids are opaque facets.
+const TAXONOMY_FIELDS =
+  "superDepartmentName departmentId departmentName aisleId aisleName shelfId shelfName";
+
 const PRODUCT_FIELDS = `
   tpnb tpnc title brandName defaultImageUrl isForSale
   productType averageWeight minWeight maxWeight increment bulkBuyLimit
   catchWeightList { price weight default }
+  ${TAXONOMY_FIELDS}
   price { actual unitPrice unitOfMeasure }
   promotions {
     description
@@ -49,6 +54,7 @@ query Search($query: String!, $page: Int = 1, $count: Int) {
           tpnc tpnb title brandName defaultImageUrl isForSale
           productType averageWeight minWeight maxWeight increment bulkBuyLimit
           catchWeightList { price weight default }
+          ${TAXONOMY_FIELDS}
           sellers {
             results {
               price { actual unitPrice unitOfMeasure }
@@ -77,6 +83,7 @@ query GetCategoryProducts($facet: ID, $page: Int = 1, $count: Int) {
           tpnc tpnb title brandName defaultImageUrl isForSale
           productType averageWeight minWeight maxWeight increment bulkBuyLimit
           catchWeightList { price weight default }
+          ${TAXONOMY_FIELDS}
           sellers {
             results {
               price { actual unitPrice unitOfMeasure }
@@ -98,6 +105,7 @@ query GetFavourites($page: Int = 1, $count: Int, $sortBy: String) {
         tpnc tpnb title brandName defaultImageUrl isForSale
         productType averageWeight minWeight maxWeight increment bulkBuyLimit
         catchWeightList { price weight default }
+        ${TAXONOMY_FIELDS}
         sellers {
           results {
             price { actual unitPrice unitOfMeasure }
@@ -157,10 +165,14 @@ mutation UpdateBasket($items: [BasketLineItemInputType], $orderId: ID) {
 
 // ---- orders ----------------------------------------------------------------
 
-const ORDER_FIELDS = `
+// `cost` is the line total charged, not a unit price.
+const ORDER_LINE_FIELDS = "id quantity unit weight cost product { id title }";
+
+const ORDER_SUMMARY_FIELDS = `
       id
       orderNo
       status
+      createdDateTime
       totalPrice
       totalItems
       isInAmend
@@ -168,8 +180,10 @@ const ORDER_FIELDS = `
       shoppingMethod
       paymentMode
       slot { id start end charge }
-      address { name city addressLine1 postcode }
-      items { id quantity unit weight product { id title } }`;
+      address { name city addressLine1 postcode }`;
+
+const ORDER_FIELDS = `${ORDER_SUMMARY_FIELDS}
+      items { ${ORDER_LINE_FIELDS} }`;
 
 export const GET_UPCOMING_ORDERS = `
 query GetUpcomingOrders($orderContexts: [OrderContextType]) {
@@ -213,7 +227,16 @@ export const GET_LAST_FULFILLED_ORDER = `
 query GetLastFulfilledOrder($status: OrderStatusInputType) {
   order(status: $status) {
     orderNo
-    items { id quantity unit weight product { id title } }
+    items { ${ORDER_LINE_FIELDS} }
+  }
+}`.trim();
+
+// One order by id, with its lines grouped into `splitView` splits (one per
+// fulfilment) — the view Tesco's receipt page renders.
+export const GET_ORDER_RECEIPT = `
+query GetOrderReceipt($orderId: ID!) {
+  order(orderId: $orderId) {${ORDER_SUMMARY_FIELDS}
+      splitView { items { ${ORDER_LINE_FIELDS} } }
   }
 }`.trim();
 

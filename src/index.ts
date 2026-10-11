@@ -42,6 +42,7 @@ export type {
   Price,
   Product,
   ProductQuantityRules,
+  ProductTaxonomy,
   Promotion,
   Range,
   SearchPage,
